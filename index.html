@@ -2828,7 +2828,16 @@ function downloadText(fn, txt) {
 // ════════════════════════════════════════
 // SUMMARY TAB
 // ════════════════════════════════════════
-const SUMMARY_RANGE = {start:'2026-04-01', end:'2026-04-30', compare:false};
+(function(){
+  const _t = new Date();
+  const _d = _t.getDate();
+  const _y = new Date(_t); _y.setDate(_y.getDate() - 1);
+  // 1〜3日は前月1日〜前日、4日以降は当月1日〜前日
+  const _s = _d <= 3
+    ? new Date(_t.getFullYear(), _t.getMonth() - 1, 1)
+    : new Date(_t.getFullYear(), _t.getMonth(), 1);
+  window.SUMMARY_RANGE = {start: fmtDash(_s), end: fmtDash(_y), compare: false};
+})();
 
 function parseDashDate(v) {
   const parts = String(v || '').split('-').map(Number);
