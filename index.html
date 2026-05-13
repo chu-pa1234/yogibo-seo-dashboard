@@ -294,6 +294,7 @@ select.inp{cursor:pointer;}
     <div class="sb-grp">Analytics</div>
     <button class="ni" onclick="showTab(&#39;records&#39;,this)"><span class="nic">📊</span>レコード / GA4実績</button>
     <button class="ni" onclick="showTab(&#39;keyword&#39;,this)"><span class="nic">🔍</span>KW・順位チェック</button>
+    <button class="ni" onclick="showTab(&#39;article&#39;,this)"><span class="nic">📰</span>記事流入分析</button>
     <div class="sb-grp">Technical</div>
     <button class="ni" onclick="showTab(&#39;technical&#39;,this)"><span class="nic">🔧</span>テクニカル/タスク<span class="nbadge">7</span></button>
     <div class="sb-grp">Research</div>
@@ -2355,6 +2356,54 @@ select.inp{cursor:pointer;}
 </div>
 
 
+
+<!-- ═══ TAB: 記事流入分析 ═══ -->
+<div class="panel" id="tab-article">
+<div class="iscroll">
+  <div class="sec-hdr gap">
+    <div class="sec-tag">ARTICLE</div>
+    <div class="sec-ttl">記事流入分析<span>GSC クリック数 Top10 &amp; 急上昇記事（直近45日 vs 前45日）</span></div>
+    <div class="sec-line"></div>
+  </div>
+  <div style="font-size:11px;color:var(--tx3);margin-bottom:12px;font-family:var(--mo);">
+    📅 直近期間: <b>2026/03/29–2026/05/12</b> &nbsp;|&nbsp; 比較期間: <b>2026/02/12–2026/03/28</b> &nbsp;|&nbsp; データ: Google Search Console（ブログ記事のみ）
+  </div>
+
+  <div class="sec-hdr gap" style="margin-top:8px;">
+    <div class="sec-tag" style="background:var(--or-bg);color:var(--or);">TOP 10</div>
+    <div class="sec-ttl">クリック数 上位10記事<span>直近45日間の流入クリック数ランキング</span></div>
+  </div>
+  <div style="overflow-x:auto;margin-bottom:24px;">
+    <table class="tbl"><thead><tr>
+      <th style="min-width:32px;">#</th>
+      <th style="min-width:220px;">記事スラッグ</th>
+      <th style="text-align:right;">クリック</th>
+      <th style="text-align:right;">前期比</th>
+      <th style="text-align:right;">表示回数</th>
+      <th style="text-align:right;">CTR</th>
+      <th style="text-align:right;">順位</th>
+      <th></th>
+    </tr></thead><tbody id="article-top10-body"></tbody></table>
+  </div>
+
+  <div class="sec-hdr gap">
+    <div class="sec-tag" style="background:rgba(5,150,105,.12);color:#059669;">急上昇</div>
+    <div class="sec-ttl">流入が伸びている記事<span>前期比 +20%以上かつ直近100クリック以上（成長率順）</span></div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="tbl"><thead><tr>
+      <th>成長率</th>
+      <th style="min-width:220px;">記事スラッグ</th>
+      <th style="text-align:right;">直近</th>
+      <th style="text-align:right;">前期</th>
+      <th style="text-align:right;">増加数</th>
+      <th style="text-align:right;">CTR</th>
+      <th style="text-align:right;">順位</th>
+      <th></th>
+    </tr></thead><tbody id="article-growing-body"></tbody></table>
+  </div>
+</div>
+</div>
 </div><!-- /main -->
 <div id="toast" style="opacity: 0; transform: translateX(-50%) translateY(14px);">✅ サマリーを更新しました</div>
 
