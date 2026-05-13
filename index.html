@@ -2407,6 +2407,19 @@ select.inp{cursor:pointer;}
     </tr></thead><tbody id="article-growing-body"></tbody></table>
   </div>
 
+  <!-- 日別推移グラフ -->
+  <div class="sec-hdr gap">
+    <div class="sec-tag" style="background:rgba(5,150,105,.12);color:#059669;">日次推移</div>
+    <div class="sec-ttl">チェック記事の日別クリック推移<span>直近90日間の日別クリック数（データ取得済み記事のみ）</span></div>
+  </div>
+  <div id="art-daily-no-data" style="display:none;font-size:12px;color:var(--tx3);padding:12px;background:var(--sf2);border-radius:8px;margin-bottom:12px;">
+    ⚠️ 日別データはまだ取得されていません。週次レポート実行後に表示されます。
+  </div>
+  <div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:24px;">
+    <canvas id="article-daily-chart" style="width:100%;height:220px;display:block;"></canvas>
+    <div id="article-daily-legend" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;font-size:11px;color:var(--tx2);"></div>
+  </div>
+
   <!-- 月次推移グラフ -->
   <div class="sec-hdr gap">
     <div class="sec-tag" style="background:rgba(37,99,235,.1);color:#2563EB;">月次推移</div>
@@ -5169,6 +5182,7 @@ function applyArticleRange() {
   renderTop10Table(months);
   renderGrowingTable(months);
   renderArticleChart(months);
+  renderArticleDailyChart();
 }
 
 function renderTop10Table(months) {
@@ -5246,6 +5260,7 @@ function onArticleCheck() {
     document.getElementById('art-range-end') ? document.getElementById('art-range-end').value : ''
   );
   renderArticleChart(months);
+  renderArticleDailyChart();
 }
 
 function renderArticleChart(months) {
@@ -5332,6 +5347,102 @@ function renderArticleChart(months) {
   }
 }
 
+
+function renderArticleDailyChart() {
+  const canvas = document.getElementById('article-daily-chart');
+  const noDataEl = document.getElementById('art-daily-no-data');
+  if (!canvas) return;
+
+  const d = ARTICLE_TRAFFIC_DATA;
+  const all = allUniqueArticles();
+  const checked = [...document.querySelectorAll('.art-chk:checked')].map(cb => cb.dataset.url);
+
+  // 日別データが存在する記事を確認
+  const hasAnyDaily = all.some(a => a.daily && Object.keys(a.daily).length > 0);
+  if (noDataEl) noDataEl.style.display = hasAnyDaily ? 'none' : 'block';
+
+  // 期間フィルター
+  const startStr = document.getElementById('art-range-start') ? document.getElementById('art-range-start').value : '';
+  const endStr   = document.getElementById('art-range-end')   ? document.getElementById('art-range-end').value   : '';
+
+  // チェック済み記事の日別データを収集
+  const series = [];
+  checked.forEach((url, ci) => {
+    const a = all.find(x => x.url === url);
+    if (!a || !a.daily || !Object.keys(a.daily).length) return;
+    const days = Object.keys(a.daily).sort().filter(d =>
+      (!startStr || d >= startStr) && (!endStr || d <= endStr)
+    );
+    if (days.length) series.push({ a, days, color: ARTICLE_COLORS[ci % ARTICLE_COLORS.length] });
+  });
+
+  const W = canvas.offsetWidth || 600, H = 220;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const legendEl = document.getElementById('article-daily-legend');
+
+  if (!series.length) {
+    ctx.fillStyle = '#8C97B8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(
+      hasAnyDaily ? '記事にチェックを入れるとグラフが表示されます（日別データがある記事のみ）' : 'チェックを入れると表示されます',
+      W / 2, H / 2
+    );
+    if (legendEl) legendEl.innerHTML = '';
+    return;
+  }
+
+  // 全期間の日付軸を統一
+  const allDays = [...new Set(series.flatMap(s => s.days))].sort();
+  const n = allDays.length;
+  if (!n) return;
+
+  const pad = { l: 44, r: 16, t: 12, b: 32 };
+  const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+  const tx = i => pad.l + i * cW / Math.max(n - 1, 1);
+
+  let maxV = 0;
+  series.forEach(s => { allDays.forEach(d => { maxV = Math.max(maxV, s.a.daily[d] || 0); }); });
+  if (!maxV) maxV = 100;
+  maxV *= 1.15;
+  const ty = v => pad.t + cH - (v / maxV) * cH;
+
+  // Grid
+  ctx.strokeStyle = '#E3E8F0'; ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1].forEach(f => {
+    const y = ty(maxV * f);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillStyle = '#8C97B8'; ctx.font = '9px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxV * f), pad.l - 3, y + 3);
+  });
+
+  // Lines
+  const legendItems = [];
+  series.forEach(({ a, color }) => {
+    const vals = allDays.map(d => a.daily[d] || 0);
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([]);
+    ctx.beginPath();
+    vals.forEach((v, i) => { i === 0 ? ctx.moveTo(tx(i), ty(v)) : ctx.lineTo(tx(i), ty(v)); });
+    ctx.stroke();
+    legendItems.push({ color, title: a.title || a.slug });
+  });
+
+  // X labels（週1程度）
+  ctx.fillStyle = '#8C97B8'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+  const step = Math.max(1, Math.floor(n / 8));
+  for (let i = 0; i < n; i += step) {
+    ctx.fillText(allDays[i].slice(5), tx(i), H - 8);  // MM-DD
+  }
+
+  if (legendEl) {
+    legendEl.innerHTML = legendItems.map(it =>
+      '<span style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:11px;">'
+      + '<span style="display:inline-block;width:14px;height:3px;border-radius:2px;background:' + it.color + ';"></span>'
+      + it.title + '</span>'
+    ).join('');
+  }
+}
+
 function renderArticleTab() {
   // デフォルト期間をセット（月初〜前日）
   const today = new Date();
@@ -5348,6 +5459,7 @@ function renderArticleTab() {
   if (endEl && !endEl.value) endEl.value = fmt(yesterday);
 
   applyArticleRange();
+  setTimeout(renderArticleDailyChart, 100);
 }
 
 </script>
