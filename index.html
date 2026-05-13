@@ -2362,11 +2362,18 @@ select.inp{cursor:pointer;}
 <div class="iscroll">
   <div class="sec-hdr gap">
     <div class="sec-tag">ARTICLE</div>
-    <div class="sec-ttl">記事流入分析<span>GSC クリック数 Top10 &amp; 急上昇記事（直近45日 vs 前45日）</span></div>
+    <div class="sec-ttl">記事流入分析<span>GSC クリック数ランキング &amp; 急上昇記事 &amp; 月次推移</span></div>
     <div class="sec-line"></div>
   </div>
-  <div style="font-size:11px;color:var(--tx3);margin-bottom:12px;font-family:var(--mo);">
-    📅 直近期間: <b>2026/03/29–2026/05/12</b> &nbsp;|&nbsp; 比較期間: <b>2026/02/12–2026/03/28</b> &nbsp;|&nbsp; データ: Google Search Console（ブログ記事のみ）
+
+  <!-- 期間指定 -->
+  <div style="background:var(--sf2);border:1px solid var(--bd);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span style="font-size:12px;font-weight:600;color:var(--tx2);">📅 期間指定</span>
+    <input type="date" id="art-range-start" class="inp" style="padding:4px 8px;font-size:12px;width:auto;">
+    <span style="font-size:12px;color:var(--tx3);">〜</span>
+    <input type="date" id="art-range-end" class="inp" style="padding:4px 8px;font-size:12px;width:auto;">
+    <button class="btn btn-gh" style="font-size:12px;padding:5px 14px;" onclick="applyArticleRange()">適用</button>
+    <span id="art-range-label" style="font-size:11px;color:var(--tx3);font-family:var(--mo);"></span>
   </div>
 
   <div class="sec-hdr gap" style="margin-top:8px;">
@@ -2380,9 +2387,6 @@ select.inp{cursor:pointer;}
       <th style="min-width:220px;">記事タイトル</th>
       <th style="text-align:right;">クリック</th>
       <th style="text-align:right;">前期比</th>
-      <th style="text-align:right;">表示回数</th>
-      <th style="text-align:right;">CTR</th>
-      <th style="text-align:right;">順位</th>
       <th>GSC</th>
     </tr></thead><tbody id="article-top10-body"></tbody></table>
   </div>
@@ -2395,13 +2399,10 @@ select.inp{cursor:pointer;}
     <table class="tbl"><thead><tr>
       <th style="width:28px;"></th>
       <th style="min-width:220px;">記事タイトル</th>
-      <th style="text-align:right;">クリック</th>
+      <th style="text-align:right;">直近</th>
       <th style="text-align:right;">成長率</th>
       <th style="text-align:right;">前期</th>
       <th style="text-align:right;">増加数</th>
-      <th style="text-align:right;">表示回数</th>
-      <th style="text-align:right;">CTR</th>
-      <th style="text-align:right;">順位</th>
       <th>GSC</th>
     </tr></thead><tbody id="article-growing-body"></tbody></table>
   </div>
@@ -2411,12 +2412,7 @@ select.inp{cursor:pointer;}
     <div class="sec-tag" style="background:rgba(37,99,235,.1);color:#2563EB;">月次推移</div>
     <div class="sec-ttl">チェック記事の月次クリック推移<span>チェックを入れた記事の月別クリック数をグラフ表示（最大10記事）</span></div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-    <span style="font-size:12px;color:var(--tx2);">期間:</span>
-    <select id="art-from" class="inp" style="padding:4px 8px;font-size:12px;width:auto;"></select>
-    <span style="font-size:12px;color:var(--tx3);">〜</span>
-    <select id="art-to" class="inp" style="padding:4px 8px;font-size:12px;width:auto;"></select>
-  </div>
+
   <div style="background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px;">
     <canvas id="article-chart" style="width:100%;height:220px;display:block;"></canvas>
     <div id="article-legend" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;font-size:11px;color:var(--tx2);"></div>
@@ -5107,114 +5103,164 @@ document.addEventListener('DOMContentLoaded', () => {
 // ════════════════════════════════════════════════════════
 // ARTICLE TRAFFIC TAB
 // ════════════════════════════════════════════════════════
-
-// ════════════════════════════════════════════════════════
-// ARTICLE TRAFFIC TAB
-// ════════════════════════════════════════════════════════
 const ARTICLE_COLORS = [
   '#2563EB','#059669','#D97706','#DC2626','#7C3AED',
   '#0891B2','#65A30D','#DB2777','#EA580C','#0284C7'
 ];
-let articleChecked = {};  // url -> true/false
 
 function gscUrl(url) {
   return 'https://search.google.com/search-console/performance/search-analytics?resource_id=https%3A%2F%2Fyogibo.jp%2F&page=' + encodeURIComponent(url);
 }
-
-function growthBadge(g) {
-  if (g === null || g === undefined) return '<span class="badge" style="background:var(--sf2);color:var(--tx3);">NEW</span>';
-  const cls = g >= 50 ? 'b-gn' : g >= 0 ? 'b-am' : 'b-rd';
-  return '<span class="badge ' + cls + '">' + (g > 0 ? '+' : '') + g + '%</span>';
-}
-
 function posColor(p) {
   return p <= 3 ? 'color:var(--gn);' : p <= 10 ? 'color:var(--am);' : 'color:var(--rd);';
 }
-
-function articleRow(a, idx, palette) {
-  const colDot = palette
-    ? '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + palette + ';margin-right:4px;vertical-align:middle;"></span>'
-    : '';
-  return '<tr>'
-    + '<td style="text-align:center;"><input type="checkbox" class="art-chk" data-url="' + a.url + '" onchange="onArticleCheck()" style="width:14px;height:14px;cursor:pointer;"></td>'
-    + (idx !== undefined ? '<td style="font-family:var(--fe);font-weight:700;color:var(--or);">' + (idx + 1) + '</td>' : '')
-    + '<td>' + colDot + '<a href="' + a.url + '" target="_blank" title="' + a.slug + '" style="color:var(--bl);font-size:12px;">' + (a.title || a.slug) + '</a></td>'
-    + '<td style="text-align:right;font-family:var(--fe);font-weight:700;">' + a.clicks.toLocaleString() + '</td>'
-    + (idx !== undefined ? '<td style="text-align:right;">' + growthBadge(a.growth) + '</td>' : '')
-    + (idx === undefined ? '<td style="text-align:right;"><span class="badge b-gn" style="font-size:12px;padding:3px 8px;">+' + a.growth + '%</span></td>'
-                         + '<td style="text-align:right;color:var(--tx3);font-size:11px;">' + a.clicks_prev.toLocaleString() + '</td>'
-                         + '<td style="text-align:right;font-size:11px;color:var(--gn);">+' + (a.clicks - a.clicks_prev).toLocaleString() + '</td>' : '')
-    + '<td style="text-align:right;color:var(--tx3);font-size:11px;">' + a.impr.toLocaleString() + '</td>'
-    + '<td style="text-align:right;font-size:11px;">' + a.ctr + '%</td>'
-    + '<td style="text-align:right;font-size:11px;font-family:var(--fe);font-weight:600;' + posColor(a.pos) + '">' + a.pos + '</td>'
-    + '<td><a href="' + gscUrl(a.url) + '" target="_blank" class="btn btn-gh btn-sm" title="Search Console で確認">GSC↗</a></td>'
-    + '</tr>';
+function growthBadge(g) {
+  if (g === null || g === undefined) return '<span class="badge" style="background:var(--sf2);color:var(--tx3);">-</span>';
+  const cls = g >= 50 ? 'b-gn' : g >= 10 ? 'b-am' : 'b-rd';
+  return '<span class="badge ' + cls + '">' + (g > 0 ? '+' : '') + g + '%</span>';
 }
 
-function renderArticleTab() {
+// 指定日付範囲に含まれる月リストを返す
+function getMonthsForRange(startStr, endStr) {
   const d = ARTICLE_TRAFFIC_DATA;
+  const allMonths = Object.keys(d.top10[0].monthly || {}).sort();
+  if (!startStr || !endStr) return allMonths;
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  return allMonths.filter(mo => {
+    const y = parseInt(mo.slice(0, 4)), m = parseInt(mo.slice(5, 7));
+    const moStart = new Date(y, m - 1, 1);
+    const moEnd = new Date(y, m, 0);
+    return moStart <= end && moEnd >= start;
+  });
+}
 
-  // Top10
-  const top10Body = document.getElementById('article-top10-body');
-  if (top10Body) {
-    top10Body.innerHTML = d.top10.map((a, i) => articleRow(a, i, null)).join('');
+// 月リストから記事別クリック合計を計算
+function sumClicks(article, months) {
+  return months.reduce((s, mo) => s + (article.monthly[mo] || 0), 0);
+}
+
+// 重複除去した全記事リスト
+function allUniqueArticles() {
+  const d = ARTICLE_TRAFFIC_DATA;
+  const seen = new Set();
+  return [...d.top10, ...d.growing].filter(a => {
+    if (seen.has(a.url)) return false;
+    seen.add(a.url); return true;
+  });
+}
+
+// 現在の期間設定を取得
+function getArticleRange() {
+  const s = document.getElementById('art-range-start');
+  const e = document.getElementById('art-range-end');
+  return { start: s ? s.value : '', end: e ? e.value : '' };
+}
+
+function applyArticleRange() {
+  const { start, end } = getArticleRange();
+  const months = getMonthsForRange(start, end);
+  const label = document.getElementById('art-range-label');
+  if (label) {
+    label.textContent = months.length
+      ? '対象月: ' + months[0] + ' 〜 ' + months[months.length - 1] + '（' + months.length + 'ヶ月）'
+      : '対象月なし';
   }
+  renderTop10Table(months);
+  renderGrowingTable(months);
+  renderArticleChart(months);
+}
 
-  // Growing
-  const growingBody = document.getElementById('article-growing-body');
-  if (growingBody) {
-    growingBody.innerHTML = d.growing.map(a => articleRow(a, undefined, null)).join('');
+function renderTop10Table(months) {
+  const articles = allUniqueArticles();
+  const ranked = articles
+    .map(a => ({ ...a, clicks_range: sumClicks(a, months) }))
+    .sort((a, b) => b.clicks_range - a.clicks_range)
+    .slice(0, 10);
+
+  const body = document.getElementById('article-top10-body');
+  if (!body) return;
+  body.innerHTML = ranked.map((a, i) => {
+    // 前後半比較
+    const mid = Math.ceil(months.length / 2);
+    const first = months.slice(0, mid), second = months.slice(mid);
+    const c1 = sumClicks(a, first), c2 = sumClicks(a, second);
+    const growth = c1 > 0 ? Math.round((c2 / c1 - 1) * 100) : null;
+    return '<tr>'
+      + '<td style="text-align:center;"><input type="checkbox" class="art-chk" data-url="' + a.url + '" onchange="onArticleCheck()" style="width:14px;height:14px;cursor:pointer;"></td>'
+      + '<td style="font-family:var(--fe);font-weight:700;color:var(--or);">' + (i + 1) + '</td>'
+      + '<td><a href="' + a.url + '" target="_blank" title="' + a.slug + '" style="color:var(--bl);font-size:12px;">' + (a.title || a.slug) + '</a></td>'
+      + '<td style="text-align:right;font-family:var(--fe);font-weight:700;">' + a.clicks_range.toLocaleString() + '</td>'
+      + '<td style="text-align:right;">' + growthBadge(growth) + '</td>'
+      + '<td><a href="' + gscUrl(a.url) + '" target="_blank" class="btn btn-gh btn-sm">GSC↗</a></td>'
+      + '</tr>';
+  }).join('');
+}
+
+function renderGrowingTable(months) {
+  if (months.length < 2) {
+    const body = document.getElementById('article-growing-body');
+    if (body) body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tx3);padding:16px;">期間が短すぎます（2ヶ月以上を指定してください）</td></tr>';
+    return;
   }
+  const mid = Math.ceil(months.length / 2);
+  const first = months.slice(0, mid), second = months.slice(mid);
+  const articles = allUniqueArticles();
 
-  // 月ラベル一覧
-  const months = Object.keys(d.top10[0].monthly || {}).sort();
-  const fromSel = document.getElementById('art-from');
-  const toSel = document.getElementById('art-to');
-  if (fromSel && months.length) {
-    [fromSel, toSel].forEach(sel => {
-      sel.innerHTML = months.map(mo => '<option value="' + mo + '">' + mo + '</option>').join('');
-    });
-    fromSel.value = months[Math.max(0, months.length - 7)];
-    toSel.value = months[months.length - 1];
-    fromSel.onchange = toSel.onchange = renderArticleChart;
-  }
+  const growing = articles.map(a => {
+    const c1 = sumClicks(a, first), c2 = sumClicks(a, second);
+    const rate = c1 >= 20 && c2 >= 50 ? Math.round((c2 / c1 - 1) * 100) : null;
+    return { ...a, c1, c2, rate, diff: c2 - c1 };
+  }).filter(a => a.rate !== null && a.rate > 10)
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, 20);
 
-  renderArticleChart();
+  const body = document.getElementById('article-growing-body');
+  if (!body) return;
+
+  const periodLabel = '前半: ' + first[0] + '〜' + first[first.length-1]
+    + ' / 後半: ' + second[0] + '〜' + second[second.length-1];
+
+  body.innerHTML = growing.length
+    ? growing.map(a => '<tr>'
+        + '<td style="text-align:center;"><input type="checkbox" class="art-chk" data-url="' + a.url + '" onchange="onArticleCheck()" style="width:14px;height:14px;cursor:pointer;"></td>'
+        + '<td><a href="' + a.url + '" target="_blank" title="' + a.slug + '" style="color:var(--bl);font-size:12px;">' + (a.title || a.slug) + '</a></td>'
+        + '<td style="text-align:right;font-family:var(--fe);font-weight:700;">' + a.c2.toLocaleString() + '</td>'
+        + '<td style="text-align:right;"><span class="badge b-gn" style="padding:3px 8px;">+' + a.rate + '%</span></td>'
+        + '<td style="text-align:right;color:var(--tx3);font-size:11px;">' + a.c1.toLocaleString() + '</td>'
+        + '<td style="text-align:right;font-size:11px;color:var(--gn);">+' + a.diff.toLocaleString() + '</td>'
+        + '<td><a href="' + gscUrl(a.url) + '" target="_blank" class="btn btn-gh btn-sm">GSC↗</a></td>'
+        + '</tr>').join('')
+    : '<tr><td colspan="7" style="text-align:center;color:var(--tx3);padding:16px;">指定期間で成長している記事はありません</td></tr>';
+
+  // 期間説明を更新
+  const ttl = document.querySelector('#tab-article .sec-ttl span');
+  // just update the growing section subtitle
+  const growingSubEl = document.querySelectorAll('#tab-article .sec-ttl span');
+  if (growingSubEl[1]) growingSubEl[1].textContent = '期間前半 vs 後半の比較 (' + periodLabel + ')';
 }
 
 function onArticleCheck() {
-  const d = ARTICLE_TRAFFIC_DATA;
-  const all = [...d.top10, ...d.growing.filter(a => !d.top10.some(t => t.url === a.url))];
-  const checked = [...document.querySelectorAll('.art-chk:checked')].map(cb => cb.dataset.url);
-  // 色割当
-  let colorIdx = 0;
-  all.forEach(a => {
-    const chk = document.querySelector('.art-chk[data-url="' + a.url + '"]');
-    if (chk) {
-      const c = checked.indexOf(a.url) !== -1 ? ARTICLE_COLORS[colorIdx++ % ARTICLE_COLORS.length] : null;
-      const dot = chk.closest('tr').querySelector('span[style*="border-radius:50%"]');
-      if (dot) dot.style.background = c || 'transparent';
-    }
-  });
-  renderArticleChart();
+  const months = getMonthsForRange(
+    document.getElementById('art-range-start') ? document.getElementById('art-range-start').value : '',
+    document.getElementById('art-range-end') ? document.getElementById('art-range-end').value : ''
+  );
+  renderArticleChart(months);
 }
 
-function renderArticleChart() {
+function renderArticleChart(months) {
   const canvas = document.getElementById('article-chart');
   if (!canvas) return;
   const d = ARTICLE_TRAFFIC_DATA;
-  const all = [...d.top10, ...d.growing.filter(a => !d.top10.some(t => t.url === a.url))];
 
-  const fromSel = document.getElementById('art-from');
-  const toSel = document.getElementById('art-to');
-  const fromMo = fromSel ? fromSel.value : null;
-  const toMo = toSel ? toSel.value : null;
-
-  const allMonths = Object.keys(d.top10[0].monthly || {}).sort();
-  const months = allMonths.filter(mo => (!fromMo || mo >= fromMo) && (!toMo || mo <= toMo));
+  if (!months) {
+    const r = getArticleRange();
+    months = getMonthsForRange(r.start, r.end);
+  }
   if (!months.length) return;
 
   const checked = [...document.querySelectorAll('.art-chk:checked')].map(cb => cb.dataset.url);
+  const all = allUniqueArticles();
 
   const W = canvas.offsetWidth || 600, H = 220;
   canvas.width = W; canvas.height = H;
@@ -5224,7 +5270,7 @@ function renderArticleChart() {
   const legendEl = document.getElementById('article-legend');
 
   if (!checked.length) {
-    ctx.fillStyle = 'var(--tx3)';
+    ctx.fillStyle = '#8C97B8';
     ctx.font = '13px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('記事にチェックを入れるとグラフが表示されます', W / 2, H / 2);
@@ -5232,12 +5278,11 @@ function renderArticleChart() {
     return;
   }
 
-  const pad = {l: 44, r: 16, t: 12, b: 32};
+  const pad = { l: 44, r: 16, t: 12, b: 32 };
   const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
   const n = months.length;
   const tx = i => pad.l + i * cW / Math.max(n - 1, 1);
 
-  // max value
   let maxV = 0;
   checked.forEach(url => {
     const a = all.find(x => x.url === url);
@@ -5247,7 +5292,6 @@ function renderArticleChart() {
   maxV = maxV * 1.15;
   const ty = v => pad.t + cH - (v / maxV) * cH;
 
-  // Grid
   ctx.strokeStyle = '#E3E8F0'; ctx.lineWidth = 1;
   [0.25, 0.5, 0.75, 1].forEach(f => {
     const y = ty(maxV * f);
@@ -5256,36 +5300,29 @@ function renderArticleChart() {
     ctx.fillText(Math.round(maxV * f / 1000) + 'k', pad.l - 3, y + 3);
   });
 
-  // Lines
   const legendItems = [];
   checked.forEach((url, ci) => {
     const a = all.find(x => x.url === url);
     if (!a) return;
     const color = ARTICLE_COLORS[ci % ARTICLE_COLORS.length];
     const vals = months.map(mo => a.monthly[mo] || 0);
-
     ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]);
     ctx.beginPath();
     vals.forEach((v, i) => { i === 0 ? ctx.moveTo(tx(i), ty(v)) : ctx.lineTo(tx(i), ty(v)); });
     ctx.stroke();
-
-    // Dots
     vals.forEach((v, i) => {
       ctx.beginPath(); ctx.arc(tx(i), ty(v), 3, 0, Math.PI * 2);
       ctx.fillStyle = color; ctx.fill();
     });
-
-    legendItems.push({color, title: a.title || a.slug});
+    legendItems.push({ color, title: a.title || a.slug });
   });
 
-  // X labels
   ctx.fillStyle = '#8C97B8'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
   const step = Math.max(1, Math.floor(n / 8));
   for (let i = 0; i < n; i += step) {
     ctx.fillText(months[i].slice(2), tx(i), H - 8);
   }
 
-  // Legend
   if (legendEl) {
     legendEl.innerHTML = legendItems.map(it =>
       '<span style="display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:11px;">'
@@ -5293,6 +5330,24 @@ function renderArticleChart() {
       + it.title + '</span>'
     ).join('');
   }
+}
+
+function renderArticleTab() {
+  // デフォルト期間をセット（月初〜前日）
+  const today = new Date();
+  const dayOfMonth = today.getDate();
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const startDate = dayOfMonth <= 3
+    ? new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    : new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const startEl = document.getElementById('art-range-start');
+  const endEl = document.getElementById('art-range-end');
+  if (startEl && !startEl.value) startEl.value = fmt(startDate);
+  if (endEl && !endEl.value) endEl.value = fmt(yesterday);
+
+  applyArticleRange();
 }
 
 </script>
